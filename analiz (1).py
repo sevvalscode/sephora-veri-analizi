@@ -123,82 +123,52 @@ for col in kategorik_sutunlar:
 # Doldurma sonrası kontrol
 kalan_eksik = df.isnull().sum().sum()
 print(f"\n🎯 Doldurma sonrası toplam eksik veri: {kalan_eksik}")
-
 # ============================================================================
-# BÖLÜM 3: AYKIRI DEĞER TEMİZLİĞİ (IQR YÖNTEMİ)
+# BÖLÜM 3: AYKIRI DEĞER YÖNETİMİ (LOGARİTMİK DÖNÜŞÜM)
 # ============================================================================
 print("\n" + "=" * 80)
-print("BÖLÜM 3: AYKIRI DEĞER TEMİZLİĞİ (IQR YÖNTEMİ)")
+print("BÖLÜM 3: AYKIRI DEĞER YÖNETİMİ (LOGARİTMİK DÖNÜŞÜM)")
 print("=" * 80)
 
 # -------------------------------------------------------------------------
-# IQR (Interquartile Range / Çeyrekler Arası Açıklık) Yöntemi:
-#   Q1 = %25'lik değer (1. çeyrek)
-#   Q3 = %75'lik değer (3. çeyrek)
-#   IQR = Q3 - Q1
-#   Alt Sınır = Q1 - 1.5 * IQR
-#   Üst Sınır = Q3 + 1.5 * IQR
-#   Bu sınırların dışında kalan değerler "aykırı" kabul edilip çıkarılır.
-#
-# Neden IQR? Ortalama ve standart sapma temelli yöntemler (z-skoru gibi)
-# normal dağılım varsayar. IQR ise dağılımdan bağımsız çalışır ve
-# aykırı değerlerin kendisinden de etkilenmez.
+# LOGARİTMİK DÖNÜŞÜM STRATEJİSİ:
+# E-ticaret verilerinde (beğeni sayısı, fiyat vb.) veriler genellikle 
+# sağa çarpık (right-skewed) dağılır. Yani az sayıda ürün devasa değerlere 
+# sahipken, çoğunluk düşük değerlerde toplanır.
+# 
+# IQR ile veri silmek yerine, np.log1p() dönüşümü uygulayarak:
+# 1. Aşırı büyük değerlerin (outliers) etkisini baskılıyoruz.
+# 2. Dağılımı normal dağılıma yaklaştırıyoruz.
+# 3. %40'lara varan veri kaybını önleyip 8495 satırın tamamını koruyoruz.
 # -------------------------------------------------------------------------
 
-# Temizlenecek değişkenler
-temizlenecek_degiskenler = ['loves_count', 'rating', 'price_usd']
+# Dönüşüm uygulanacak çarpık (skewed) değişkenler
+# 'rating' sütunu 0-5 arası ve nispeten dar aralıklı olduğu için genelde log alınmaz.
+donusum_degiskenleri = ['loves_count', 'price_usd']
 
-# Temizlik öncesi veri boyutu
-onceki_boyut = len(df)
-print(f"\n📊 Temizlik ÖNCESİ veri boyutu: {onceki_boyut} satır")
+df_oncesi = df.copy() # Grafikler için eski hali sakla
 
-# Her değişken için IQR temizliği uygula
-print(f"\n🔧 IQR Temizliği Detayları:")
-print("-" * 70)
-print(f"   {'Değişken':<20} {'Q1':>10} {'Q3':>10} {'IQR':>10} {'Alt Sınır':>12} {'Üst Sınır':>12}")
-print("-" * 70)
-
-# Temizlik öncesi verileri histogram/boxplot için sakla
-df_oncesi = df.copy()
-# --- BU BLOĞU df_oncesi = df.copy() SATIRININ ÜZERİNE YAPIŞTIR ---
+# Hem df_oncesi hem de df için veri tiplerini güvene al
 for col in ['loves_count', 'rating', 'price_usd']:
+    df_oncesi[col] = pd.to_numeric(df_oncesi[col], errors='coerce')
     df[col] = pd.to_numeric(df[col], errors='coerce')
 
-# Şimdi kopyayı al (artık veriler sayı formatında)
-df_oncesi = df.copy()
-for col in temizlenecek_degiskenler:
- 
-    
-    Q1 = df[col].quantile(0.25)
-    # ... (kodun geri kalanı aynı)
-    Q1 = df[col].quantile(0.25)
-    Q3 = df[col].quantile(0.75)
-    IQR = Q3 - Q1
-    alt_sinir = Q1 - 1.5 * IQR
-    ust_sinir = Q3 + 1.5 * IQR
+print(f"\n📊 Dönüşüm ÖNCESİ veri boyutu: {len(df_oncesi)} satır")
 
-    print(f"   {col:<20} {Q1:>10.2f} {Q3:>10.2f} {IQR:>10.2f} {alt_sinir:>12.2f} {ust_sinir:>12.2f}")
+print(f"\n🔧 Logaritmik Dönüşüm Detayları:")
+print("-" * 50)
 
-    # Aykırı değerleri filtrele
-    aykiri_sayisi = ((df[col] < alt_sinir) | (df[col] > ust_sinir)).sum()
-    df = df[(df[col] >= alt_sinir) & (df[col] <= ust_sinir)]
-    print(f"   → '{col}' sütunundan {aykiri_sayisi} aykırı değer çıkarıldı.")
+# np.log1p (log(1+x)) uygula. (x=0 durumunda hata vermemesi için log yerine log1p kullanılır)
+for col in donusum_degiskenleri:
+    df[col] = np.log1p(df[col])
+    print(f"   ✅ '{col}' sütununa logaritmik dönüşüm uygulandı.")
 
-# Temizlik sonrası veri boyutu
-sonraki_boyut = len(df)
-print(f"\n📊 Temizlik SONRASI veri boyutu: {sonraki_boyut} satır")
+print(f"\n📊 Dönüşüm SONRASI veri boyutu: {len(df)} satır (VERİ KAYBI YOK)")
 
-# Temizlik öncesi/sonrası karşılaştırma tablosu
-print(f"\n{'='*60}")
-print(f" AYKIRI DEĞER TEMİZLİĞİ ÖZET TABLOSU")
-print(f"{'='*60}")
-print(f"   {'Metrik':<35} {'Değer':>15}")
-print(f"   {'-'*50}")
-print(f"   {'Temizlik Öncesi Satır Sayısı':<35} {onceki_boyut:>15,}")
-print(f"   {'Temizlik Sonrası Satır Sayısı':<35} {sonraki_boyut:>15,}")
-print(f"   {'Çıkarılan Toplam Satır':<35} {onceki_boyut - sonraki_boyut:>15,}")
-print(f"   {'Veri Kaybı Oranı':<35} {((onceki_boyut - sonraki_boyut) / onceki_boyut * 100):>14.2f}%")
-print(f"{'='*60}")
+print(f"\n📝 Yorum: Logaritmik dönüşüm sayesinde aşırı yüksek fiyatlı ve çok ")
+print(f"   sayıda beğeni alan 'viral/lüks' ürünlerin ortalamayı ve testleri ")
+print(f"   bozacak şiddeti azaltıldı. Veri kaybı yaşanmadan daha güvenilir ")
+print(f"   bir analiz ortamı oluşturuldu.")
 
 # ============================================================================
 # BÖLÜM 4: DAĞILIM ANALİZİ VE NORMALLİK TESTİ
