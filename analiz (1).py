@@ -1,15 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-===============================================================================
-ISE-216 Veri Bilimi İçin İstatistik - Proje Analiz Dosyası
-===============================================================================
-Veri Seti  : Sephora Ürün Verisi (veri.csv)
-Kaynak     : Kaggle
-Açıklama   : Bu script, Sephora kozmetik ürün veri seti üzerinde kapsamlı bir
-             istatistiksel analiz gerçekleştirir. Veri temizliği, dağılım
-             analizi, normallik testleri ve 4 farklı hipotez testi içerir.
-===============================================================================
-"""
+
 
 # ============================================================================
 # KÜTÜPHANE İMPORTLARI
@@ -60,7 +50,7 @@ print("=" * 80)
 
 # CSV dosyasını oku
 # 62. satırı bu şekilde düzelt:
-df_raw = pd.read_excel('product_info.xlsx')
+df_raw = pd.read_excel('product_info.xlsx', usecols=lambda x: 'Unnamed' not in x)
 print(f"\n✅ Veri başarıyla yüklendi!")
 print(f"\n📊 Veri Seti Boyutu:")
 print(f"   - Satır Sayısı : {df_raw.shape[0]}")
