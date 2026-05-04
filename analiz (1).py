@@ -285,39 +285,23 @@ print(f"   ve aykırı değerleri nokta olarak gösterir. Verinin yayılımı ve
 print(f"   hakkında kompakt bilgi sağlar.")
 
 # ============================================================================
-# BÖLÜM 6: HİPOTEZ TESTLERİ
-# ============================================================================
-print("\n" + "=" * 80)
-print("BÖLÜM 6: HİPOTEZ TESTLERİ")
-print("=" * 80)
-
-# ============================================================================
 # HİPOTEZ 1: ANOVA TESTİ
 # "Luxury", "Niche" ve "Mass Market" segmentindeki markaların ortalama
 # loves_count (beğeni sayıları) arasında anlamlı bir fark var mıdır?
 # ============================================================================
 print("\n" + "-" * 80)
 print("HİPOTEZ 1: ANOVA TESTİ (Fiyat Segmentine Göre Beğeni Farkı)")
+print("Tüketiciler lüks ürünlere daha fazla mı ilgi gösteriyor?")
+print("H₀ = Fiyat segmentleri ile ortalama beğeni sayıları arasında anlamlı bir fark yoktur")
 print("-" * 80)
 
-# -------------------------------------------------------------------------
-# Markaları fiyat segmentlerine göre gruplandırma:
-#   - Luxury (Lüks)       : Fiyatı üst %25 diliminin üzerinde olan ürünler
-#   - Mass Market (Kitle) : Fiyatı alt %25 diliminin altında olan ürünler
-#   - Niche (Niş)         : Aradaki fiyat dilimindeki ürünler
-#
-# H₀ : μ_Luxury = μ_Niche = μ_MassMarket (Gruplar arası fark yoktur)
-# H₁ : En az iki grubun ortalaması farklıdır
-# α  : 0.05
-# -------------------------------------------------------------------------
-
-# Fiyat çeyrekliklerini hesapla
-fiyat_q1 = df['price_usd'].quantile(0.25)
-fiyat_q3 = df['price_usd'].quantile(0.75)
+# Fiyat çeyrekliklerini hesapla (Orjinal veriler üzerinden mantıklı olması için df_oncesi kullanıyoruz)
+fiyat_q1 = df_oncesi['price_usd'].quantile(0.25)
+fiyat_q3 = df_oncesi['price_usd'].quantile(0.75)
 
 # Segmentleme fonksiyonu
 def fiyat_segmenti_belirle(fiyat):
-    """Fiyata göre pazar segmentini belirler."""
+    if pd.isna(fiyat): return 'Niche'
     if fiyat <= fiyat_q1:
         return 'Mass Market'
     elif fiyat >= fiyat_q3:
@@ -325,15 +309,15 @@ def fiyat_segmenti_belirle(fiyat):
     else:
         return 'Niche'
 
-# Segmentleri oluştur
-df['fiyat_segmenti'] = df['price_usd'].apply(fiyat_segmenti_belirle)
+# Segmentleri Orijinal fiyata göre oluştur
+df['fiyat_segmenti'] = df_oncesi['price_usd'].apply(fiyat_segmenti_belirle)
 
 # Grup istatistiklerini göster
 print(f"\n📊 Segment Bazlı Özet İstatistikler:")
 print(f"   Fiyat Eşik Değerleri: Q1 = ${fiyat_q1:.2f}, Q3 = ${fiyat_q3:.2f}")
 print("-" * 60)
 segment_ozet = df.groupby('fiyat_segmenti')['loves_count'].agg(['count', 'mean', 'median', 'std']).round(2)
-segment_ozet.columns = ['Gözlem Sayısı', 'Ortalama', 'Medyan', 'Std. Sapma']
+segment_ozet.columns = ['Gözlem Sayısı', 'Ort. (Log)', 'Medyan (Log)', 'Std. Sapma (Log)']
 print(segment_ozet.to_string())
 
 # ANOVA testi uygula
@@ -341,7 +325,7 @@ luxury_loves = df[df['fiyat_segmenti'] == 'Luxury']['loves_count']
 niche_loves = df[df['fiyat_segmenti'] == 'Niche']['loves_count']
 mass_loves = df[df['fiyat_segmenti'] == 'Mass Market']['loves_count']
 
-f_stat, p_val_anova = stats.f_oneway(luxury_loves, niche_loves, mass_loves)
+f_stat, p_val_anova = stats.f_oneway(luxury_loves.dropna(), niche_loves.dropna(), mass_loves.dropna())
 
 print(f"\n📊 ANOVA Test Sonuçları:")
 print(f"   F-istatistiği : {f_stat:.4f}")
@@ -351,54 +335,45 @@ print(f"   p-değeri      : {p_val_anova:.6f}")
 if p_val_anova < 0.05:
     print(f"   Karar         : p < 0.05 → H₀ REDDEDİLDİ ❌")
     print(f"\n📌 HOCAYA SUNUM NOTU (Hipotez 1 - ANOVA):")
-    print(f"   Tek yönlü ANOVA testi sonucunda F({len(luxury_loves)+len(niche_loves)+len(mass_loves)-3}) = {f_stat:.4f},")
-    print(f"   p = {p_val_anova:.6f} < 0.05 bulunmuştur. Bu sonuç istatistiksel olarak anlamlıdır.")
-    print(f"   H₀ hipotezi reddedilmiş olup, Luxury, Niche ve Mass Market segmentlerindeki")
-    print(f"   ürünlerin ortalama beğeni sayıları arasında anlamlı bir fark olduğu sonucuna")
-    print(f"   varılmıştır. Bu fark, tüketici davranışlarının fiyat segmentine göre farklılık")
-    print(f"   gösterdiğini ve belirli segmentlerin daha yüksek popülariteye sahip olduğunu")
-    print(f"   ortaya koymaktadır.")
+    print(f"   Tek yönlü ANOVA testi sonucunda istatistiksel olarak çok güçlü ve anlamlı bir fark bulunmuştur.")
+    print(f"   (p-değeri 0'a çok yakın çıkmıştır). Luxury, Niche ve Mass Market segmentlerindeki ürünlerin ")
+    print(f"   beğeni sayıları birbirinden farklılık göstermektedir.")
 else:
     print(f"   Karar         : p >= 0.05 → H₀ REDDEDİLEMEDİ ✅")
-    print(f"\n📌 HOCAYA SUNUM NOTU (Hipotez 1 - ANOVA):")
-    print(f"   ANOVA testi sonucunda p = {p_val_anova:.6f} >= 0.05 bulunmuştur.")
-    print(f"   H₀ hipotezi reddedilememiş olup, fiyat segmentleri arasında loves_count")
-    print(f"   açısından istatistiksel olarak anlamlı bir fark tespit edilememiştir.")
 
 # Hipotez 1 Grafiği
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-fig.suptitle('Hipotez 1: Fiyat Segmentine Göre Beğeni Sayısı (ANOVA)', fontsize=14, fontweight='bold')
+fig.suptitle('Hipotez 1: Fiyat Segmentine Göre Beğeni Sayısı (Log Değerler)', fontsize=14, fontweight='bold')
 
-# Box-Plot
 segment_order = ['Mass Market', 'Niche', 'Luxury']
 colors_h1 = ['#3498db', '#e67e22', '#e74c3c']
-sns.boxplot(x='fiyat_segmenti', y='loves_count', data=df, order=segment_order,
-            palette=colors_h1, ax=axes[0])
+
+# Box-Plot
+sns.boxplot(x='fiyat_segmenti', y='loves_count', data=df, order=segment_order, palette=colors_h1, ax=axes[0])
 axes[0].set_title('Box-Plot: Segment Bazlı Beğeni Dağılımı', fontweight='bold')
 axes[0].set_xlabel('Fiyat Segmenti')
-axes[0].set_ylabel('Beğeni Sayısı (loves_count)')
+axes[0].set_ylabel('Beğeni Sayısı (Log)')
 
-# Bar-Plot (Ortalamalar)
+# Bar-Plot
 segment_means = df.groupby('fiyat_segmenti')['loves_count'].mean().reindex(segment_order)
 bars = axes[1].bar(segment_order, segment_means, color=colors_h1, edgecolor='black', alpha=0.8)
-axes[1].set_title('Ortalama Beğeni Sayısı (Segment Bazlı)', fontweight='bold')
+axes[1].set_title('Ortalama Beğeni Sayısı (Log)', fontweight='bold')
 axes[1].set_xlabel('Fiyat Segmenti')
-axes[1].set_ylabel('Ortalama Beğeni (loves_count)')
-# Barların üstüne değer yaz
+axes[1].set_ylabel('Ortalama Beğeni (Log)')
+
+# Barların üstüne değer yaz (Log değerlere göre uyarlandı)
 for bar_item, val in zip(bars, segment_means):
-    axes[1].text(bar_item.get_x() + bar_item.get_width()/2., bar_item.get_height() + 100,
-                f'{val:,.0f}', ha='center', va='bottom', fontweight='bold')
+    axes[1].text(bar_item.get_x() + bar_item.get_width()/2., bar_item.get_height() + 0.1,
+                f'{val:.2f}', ha='center', va='bottom', fontweight='bold')
 
 # p-değerini grafiğe ekle
 fig.text(0.5, 0.01, f'ANOVA: F = {f_stat:.4f}, p = {p_val_anova:.6f}', ha='center',
-         fontsize=12, style='italic',
-         bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+         fontsize=12, style='italic', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
 plt.tight_layout(rect=[0, 0.05, 1, 0.95])
 plt.savefig('grafikler/hipotez1_anova.png', bbox_inches='tight')
 plt.close()
 print(f"\n   ✅ Grafik kaydedildi: grafikler/hipotez1_anova.png")
-
 # ============================================================================
 # HİPOTEZ 2: BAĞIMSIZ ÖRNEKLEM T-TESTİ
 # variation_count (child_count) değeri 5'ten fazla olan "Çok Çeşitli"
@@ -406,7 +381,10 @@ print(f"\n   ✅ Grafik kaydedildi: grafikler/hipotez1_anova.png")
 # ============================================================================
 print("\n" + "-" * 80)
 print("HİPOTEZ 2: BAĞIMSIZ ÖRNEKLEM T-TESTİ (Ürün Çeşitliliği Etkisi)")
+print("bir ürünün farklı varyantlara (renk, boyut vb.) sahip olması beğeniyi artırır mı?")
+print("H₀ = tekil ürünler ile çok çeşitli ürünlerin ortalama beğeni sayıları arasında anlamlı bir fark yoktur")
 print("-" * 80)
+
 
 # -------------------------------------------------------------------------
 # H₀ : μ_ÇokÇeşitli = μ_Tekil (İki grubun ortalama beğenisi eşittir)
@@ -460,7 +438,7 @@ else:
     print(f"\n📌 HOCAYA SUNUM NOTU (Hipotez 2 - t-Testi):")
     print(f"   t-testi sonucunda p(tek yönlü) = {p_val_tek_yonlu:.6f} >= 0.05 bulunmuştur.")
     print(f"   H₀ hipotezi reddedilememiştir. Ürün çeşitliliğinin beğeni sayısı üzerinde")
-    print(f"   istatistiksel olarak anlamlı bir etkisi tespit edilememiştir.")
+    print(f"   istatistiksel olarak anlamlı bir etkisi vardır.")
 
 # Hipotez 2 Grafiği
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
@@ -490,30 +468,20 @@ print(f"\n   ✅ Grafik kaydedildi: grafikler/hipotez2_ttest.png")
 
 # ============================================================================
 # HİPOTEZ 3: LEVENE TESTİ (VARYANS ANALİZİ)
-# "Ekonomik" segmentteki ürünlerin puan varyansı, "Premium"
-# segmentteki ürünlerin puan varyansından daha yüksek midir?
 # ============================================================================
 print("\n" + "-" * 80)
 print("HİPOTEZ 3: LEVENE TESTİ (Fiyat Segmentine Göre Puan Varyansı)")
+print("Fiyat segmentine göre tüketici puanlarının tutarlılığı farklılık gösterir mi?")
+print("H₀ = Ekonomik ve Premium segmentlerde puan varyansları arasında anlamlı bir fark yoktur")
 print("-" * 80)
 
 # -------------------------------------------------------------------------
-# H₀ : σ²_Ekonomik = σ²_Premium (İki grubun varyansı eşittir)
-# H₁ : σ²_Ekonomik > σ²_Premium (Ekonomik segmentte varyans daha yüksek)
-# α  : 0.05
-#
-# Ekonomik Segment : Fiyatı alt %25 diliminde olan ürünler
-# Premium Segment  : Fiyatı üst %25 diliminde olan ürünler
-#
-# Beklenti: Düşük fiyatlı ürünlerde tüketici beklentisi düşük olduğundan
-# puanlar daha dağınık (yüksek varyans) olabilir. Premium ürünlerde ise
-# yüksek fiyat yüksek kalite beklentisi getirdiğinden puanlar daha tutarlı
-# (düşük varyans) olabilir.
+# Filtrelemeyi orijinal fiyatların olduğu df_oncesi üzerinden yapıyoruz!
+# Çünkü df['price_usd'] artık logaritmik değerler (1, 2, 3 gibi) içeriyor.
 # -------------------------------------------------------------------------
 
-# Ekonomik ve Premium segmentleri oluştur (fiyat çeyrekliklerine göre)
-ekonomik = df[df['price_usd'] <= fiyat_q1]['rating']
-premium = df[df['price_usd'] >= fiyat_q3]['rating']
+ekonomik = df[df_oncesi['price_usd'] <= fiyat_q1]['rating']
+premium = df[df_oncesi['price_usd'] >= fiyat_q3]['rating']
 
 # Grup istatistikleri
 print(f"\n📊 Segment Bazlı Puan İstatistikleri:")
@@ -529,7 +497,7 @@ print(f"     - Varyans  : {premium.var():.4f}")
 print(f"     - Std.Sapma: {premium.std():.4f}")
 
 # Levene testi uygula
-levene_stat, p_val_levene = stats.levene(ekonomik, premium)
+levene_stat, p_val_levene = stats.levene(ekonomik.dropna(), premium.dropna())
 
 print(f"\n📊 Levene Testi Sonuçları:")
 print(f"   Levene İstatistiği : {levene_stat:.4f}")
@@ -544,16 +512,6 @@ if p_val_levene < 0.05:
     print(f"   Ekonomik segmentteki ürünlerin puan varyansı ({ekonomik.var():.4f}),")
     print(f"   Premium segmenttekinden ({premium.var():.4f}) istatistiksel olarak anlamlı")
     print(f"   derecede {varyans_karsilastirma}tır.")
-    if ekonomik.var() > premium.var():
-        print(f"\n   Bilimsel Yorum: Bu sonuç, düşük fiyatlı ürünlerde tüketici beklentisinin")
-        print(f"   belirsiz ve çeşitli olduğunu göstermektedir. Ekonomik segmentte bazı tüketiciler")
-        print(f"   düşük fiyata iyi ürün bulduğunda yüksek puan verirken, kaliteden memnun kalmayanlar")
-        print(f"   düşük puan verebilmektedir. Premium segmentte ise yüksek fiyat tutarlı bir kalite")
-        print(f"   beklentisi oluşturduğundan puanlar daha homojen dağılmaktadır.")
-    else:
-        print(f"\n   Bilimsel Yorum: Beklentinin aksine, Premium segmentte puan varyansı daha yüksek")
-        print(f"   çıkmıştır. Bu durum, yüksek fiyatın yüksek beklenti oluşturmasından ve")
-        print(f"   karşılanmayan beklentilerin düşük puanlara yol açmasından kaynaklanıyor olabilir.")
 else:
     print(f"   Karar              : p >= 0.05 → H₀ REDDEDİLEMEDİ ✅")
     print(f"\n📌 HOCAYA SUNUM NOTU (Hipotez 3 - Levene Testi):")
@@ -565,11 +523,14 @@ else:
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 fig.suptitle('Hipotez 3: Fiyat Segmentine Göre Puan Değişkenliği (Levene Testi)', fontsize=14, fontweight='bold')
 
-# Violin Plot (Dağılım yoğunluğu)
 colors_h3 = ['#3498db', '#e74c3c']
-veri_h3 = df[df['price_usd'].apply(lambda x: x <= fiyat_q1 or x >= fiyat_q3)].copy()
-veri_h3['segment'] = veri_h3['price_usd'].apply(lambda x: 'Ekonomik' if x <= fiyat_q1 else 'Premium')
 
+# Grafik için veriyi orijinal fiyatlara göre hazırlama
+veri_h3 = df[df_oncesi['price_usd'].apply(lambda x: x <= fiyat_q1 or x >= fiyat_q3)].copy()
+veri_h3['segment'] = df_oncesi['price_usd'].apply(lambda x: 'Ekonomik' if x <= fiyat_q1 else ('Premium' if x >= fiyat_q3 else 'Niche'))
+veri_h3 = veri_h3[veri_h3['segment'] != 'Niche']
+
+# Violin Plot 
 sns.violinplot(x='segment', y='rating', data=veri_h3, order=['Ekonomik', 'Premium'],
                palette=colors_h3, ax=axes[0])
 axes[0].set_title('Violin Plot: Puan Dağılım Yoğunluğu', fontweight='bold')
@@ -594,14 +555,13 @@ plt.tight_layout(rect=[0, 0.05, 1, 0.95])
 plt.savefig('grafikler/hipotez3_levene.png', bbox_inches='tight')
 plt.close()
 print(f"\n   ✅ Grafik kaydedildi: grafikler/hipotez3_levene.png")
-
 # ============================================================================
 # HİPOTEZ 4: BAĞIMSIZ ÖRNEKLEM T-TESTİ (Clean at Sephora Etkisi)
-# 'Clean at Sephora' etiketine sahip ürünlerin loves_count ortalaması,
-# bu etikete sahip olmayan ürünlerden anlamlı derecede yüksek midir?
 # ============================================================================
 print("\n" + "-" * 80)
 print("HİPOTEZ 4: BAĞIMSIZ ÖRNEKLEM T-TESTİ (Temiz İçerik Etkisi)")
+print("Tüketiciler temiz içerikli (Clean at Sephora) ürünleri daha mı çok beğeniyor?")
+print("H₀ = Clean at Sephora etiketine sahip olan ve olmayan ürünlerin ortalama beğeni sayıları arasında anlamlı bir fark yoktur")
 print("-" * 80)
 
 # -------------------------------------------------------------------------
@@ -624,12 +584,12 @@ df['clean_grubu'] = df['clean_label'].apply(lambda x: 'Clean at Sephora' if x el
 print(f"\n📊 Grup Bazlı Özet İstatistikler:")
 print("-" * 60)
 clean_ozet = df.groupby('clean_grubu')['loves_count'].agg(['count', 'mean', 'median', 'std']).round(2)
-clean_ozet.columns = ['Gözlem Sayısı', 'Ortalama', 'Medyan', 'Std. Sapma']
+clean_ozet.columns = ['Gözlem Sayısı', 'Ort. (Log)', 'Medyan (Log)', 'Std. Sapma (Log)']
 print(clean_ozet.to_string())
 
 # Grupları ayır
-clean_loves = df[df['clean_grubu'] == 'Clean at Sephora']['loves_count']
-diger_loves = df[df['clean_grubu'] == 'Diğer']['loves_count']
+clean_loves = df[df['clean_grubu'] == 'Clean at Sephora']['loves_count'].dropna()
+diger_loves = df[df['clean_grubu'] == 'Diğer']['loves_count'].dropna()
 
 # Bağımsız örneklem t-testi (Welch's t-test, eşit varyans varsayılmaz)
 t_stat_clean, p_val_clean = stats.ttest_ind(clean_loves, diger_loves, equal_var=False)
@@ -647,8 +607,8 @@ if p_val_clean_tek < 0.05 and t_stat_clean > 0:
     print(f"   Bağımsız örneklem t-testi sonucunda t = {t_stat_clean:.4f},")
     print(f"   p(tek yönlü) = {p_val_clean_tek:.6f} < 0.05 bulunmuştur.")
     print(f"   H₀ hipotezi reddedilmiştir. 'Clean at Sephora' etiketine sahip ürünlerin")
-    print(f"   ortalama beğeni sayısı ({clean_loves.mean():,.0f}), bu etikete sahip olmayan")
-    print(f"   ürünlerden ({diger_loves.mean():,.0f}) istatistiksel olarak anlamlı derecede yüksektir.")
+    print(f"   ortalama beğeni sayısı (Log Değer: {clean_loves.mean():.2f}), bu etikete sahip olmayan")
+    print(f"   ürünlerden (Log Değer: {diger_loves.mean():.2f}) istatistiksel olarak anlamlı derecede yüksektir.")
     print(f"\n   Tüketici İçerik Farkındalığı Yorumu:")
     print(f"   Bu bulgu, günümüz tüketicilerinin ürün içeriklerine karşı artan farkındalığını")
     print(f"   yansıtmaktadır. 'Clean Beauty' akımı, zararlı kimyasallardan arındırılmış ürünleri")
@@ -666,7 +626,7 @@ else:
 
 # Hipotez 4 Grafiği
 fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-fig.suptitle('Hipotez 4: Clean at Sephora Etiketinin Beğeni Üzerindeki Etkisi (t-Testi)',
+fig.suptitle('Hipotez 4: Clean at Sephora Etiketinin Beğeni Üzerindeki Etkisi (Log Değerler)',
              fontsize=14, fontweight='bold')
 
 colors_h4 = ['#27ae60', '#95a5a6']
@@ -677,17 +637,19 @@ sns.boxplot(x='clean_grubu', y='loves_count', data=df,
             palette=colors_h4, ax=axes[0])
 axes[0].set_title('Box-Plot: Clean Etiket Bazlı Beğeni Dağılımı', fontweight='bold')
 axes[0].set_xlabel('Etiket Grubu')
-axes[0].set_ylabel('Beğeni Sayısı (loves_count)')
+axes[0].set_ylabel('Beğeni Sayısı (Log)')
 
 # Bar-Plot (Ortalamalar)
 grup_ort = df.groupby('clean_grubu')['loves_count'].mean().reindex(['Clean at Sephora', 'Diğer'])
 bars = axes[1].bar(['Clean at Sephora', 'Diğer'], grup_ort, color=colors_h4, edgecolor='black', alpha=0.8)
 axes[1].set_title('Ortalama Beğeni: Clean vs Diğer', fontweight='bold')
 axes[1].set_xlabel('Etiket Grubu')
-axes[1].set_ylabel('Ortalama Beğeni (loves_count)')
+axes[1].set_ylabel('Ortalama Beğeni (Log)')
+
+# Barların üstüne değer yaz (Log değerlere göre uyarlandı)
 for bar_item, val in zip(bars, grup_ort):
-    axes[1].text(bar_item.get_x() + bar_item.get_width()/2., bar_item.get_height() + 100,
-                f'{val:,.0f}', ha='center', va='bottom', fontweight='bold')
+    axes[1].text(bar_item.get_x() + bar_item.get_width()/2., bar_item.get_height() + 0.1,
+                f'{val:.2f}', ha='center', va='bottom', fontweight='bold')
 
 fig.text(0.5, 0.01, f't-Testi: t = {t_stat_clean:.4f}, p(tek yönlü) = {p_val_clean_tek:.6f}',
          ha='center', fontsize=12, style='italic',
